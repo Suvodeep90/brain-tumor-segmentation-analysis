@@ -1,167 +1,206 @@
-# When Neural Segmentation Models Stumble — Code Repository
+# Brain Tumor Segmentation Analysis
 
-This repository contains the complete analysis code for the paper
-**"When Neural Segmentation Models Stumble: Radiomics and Model-Based Signatures of Brain Tumor Segmentation Failure"**.
+Code for the paper **"When Neural Segmentation Models Stumble: Radiomics and Model-Based Signatures of Brain Tumor Segmentation Failure"**.
 
-All experiments use the BraTS 2020 and BraTS 2023 datasets.
-The three segmentation models evaluated are: **3D U-Net**, **nnU-Net**, and **TransBTS**.
+We study what makes deep-learning segmentation succeed or fail on BraTS scans by comparing concordant-good and concordant-poor cases across three models (3D U-Net, nnU-Net, TransBTS), extracting a rich set of radiomic features, and training an oracle model to predict Dice scores from those features alone.
+
+All experiments use the **BraTS 2020** and **BraTS 2023** datasets.
 
 ---
 
-## Repository Structure
+## Repository Layout
 
 ```
 brain-tumor-segmentation-analysis/
 │
-├── 0_model_setup/                  # Environment files + inference setup for all 3 models
-│   ├── README.md                       – Step-by-step instructions for 3D U-Net, nnU-Net, TransBTS
-│   ├── environments/
-│   │   ├── environment_pytorch.yml     – Analysis & feature extraction environment
-│   │   ├── environment_nnunet.yml      – nnU-Net v2 inference environment (CUDA 11.8)
-│   │   └── environment_TransBTS.yml   – TransBTS inference environment
-│   └── transbts_data/
-│       ├── BraTS.py                    – TransBTS BraTS dataset loader
-│       ├── preprocess.py               – NIfTI → pkl conversion for TransBTS
-│       ├── train.txt                   – Train split (BraTS 2023 case IDs used in paper)
-│       └── valid.txt                   – Validation split
+├── segmentation/                   # Model training & inference
+│   ├── unet3d/
+│   │   ├── src/                    # Reusable Python package
+│   │   │   ├── model.py            – UNet3d architecture (GroupNorm, trilinear up)
+│   │   │   ├── dataset.py          – BratsDataset, k-fold CSV builder
+│   │   │   ├── losses.py           – BCE+Dice loss, Dice/IoU metrics
+│   │   │   └── __init__.py
+│   │   ├── Train_UNet3D.ipynb      – Full 6-fold cross-validation training loop
+│   │   ├── Run_Inference.ipynb     – Batch inference → per-case Dice scores
+│   │   └── Individual_Model_Analysis.ipynb
+│   ├── nnunet/                     # nnUNet v2 — CLI commands & config notes
+│   ├── transbts/                   # TransBTS data preparation scripts
+│   │   ├── BraTS.py                – TransBTS dataset loader
+│   │   ├── preprocess.py           – NIfTI → pkl conversion
+│   │   ├── train.txt               – Train split (BraTS 2023 case IDs)
+│   │   └── valid.txt               – Validation split
+│   └── environments/               # Conda environment files
+│       ├── environment_pytorch.yml – Analysis & 3D U-Net environment
+│       ├── environment_nnunet.yml  – nnUNet v2 (CUDA 11.8)
+│       └── environment_TransBTS.yml
 │
-├── 1_segmentation_models/          # CNN model inference
-│   └── unet_3d/
-│       ├── Run_Inference.ipynb         – Run the trained 3D U-Net on BraTS test cases;
-│       │                                 outputs per-case Dice scores
-│       └── Individual_Model.ipynb      – Single-model Dice analysis and overlap selection
-│
-├── 2_feature_extraction/           # Extract features from MRI + segmentation masks
-│   ├── shape/
-│   │   ├── Calculate_Volume.ipynb      – Volume and surface area of tumor subregions
-│   │   └── Calculate_Curvature.ipynb   – Local curvature of the tumor surface (trimesh)
-│   ├── intensity/
-│   │   ├── Calculate_Intensity.ipynb   – First-order intensity statistics (mean, entropy, …)
-│   │   └── Calculate_Position.ipynb    – Tumor centroid and spatial position features
-│   ├── texture/
-│   │   ├── Calculate_Texture.ipynb     – GLCM / GLDM / GLRLM / GLSZM / NGTDM textures
-│   │   └── calculate_texture.py        – Standalone script version of the above
-│   ├── model_based/
+├── feature_extraction/             # Radiomic feature computation
+│   ├── shape/                      # Volume, curvature
+│   │   ├── Calculate_Volume.ipynb
+│   │   └── Calculate_Curvature.ipynb
+│   ├── intensity/                  # First-order histogram, spatial position
+│   │   ├── Calculate_Intensity.ipynb
+│   │   └── Calculate_Position.ipynb
+│   ├── texture/                    # GLCM, GLDM, GLRLM, GLSZM, NGTDM
+│   │   ├── Calculate_Texture.ipynb
+│   │   └── calculate_texture.py
+│   ├── model_based/                # Probability map & gradient-saliency features
 │   │   └── Calculate_Probability_Features.ipynb
-│   │                                   – Softmax probability and gradient-saliency features
-│   │                                     extracted from the U-Net's output layer
-│   └── radiomics/
-│       ├── pyradiomics.ipynb           – PyRadiomics feature extraction setup
-│       ├── Process_Radiomics_Features.ipynb – Post-process / clean raw radiomics CSVs
-│       └── Radiomics_Shape_WT_TC_ET.ipynb   – Shape features per tumor subregion (WT/TC/ET)
+│   └── radiomics/                  # PyRadiomics baseline
+│       ├── pyradiomics.ipynb
+│       ├── Process_Radiomics_Features.ipynb
+│       └── Radiomics_Shape_WT_TC_ET.ipynb
 │
-├── 3_statistical_analysis/         # Feature selection and correlation
-│   ├── feature_selection.py            – Mann-Whitney U test + Cliff's delta filtering
-│   ├── Feature_Correlations.ipynb      – Pairwise correlation heatmaps
-│   ├── Selected_Features.ipynb         – Final significant-feature inventory
-│   └── feature_correlation/
-│       └── Feature_Correlation_Analysis.ipynb – In-depth correlation / redundancy analysis
+├── statistical_analysis/           # Feature significance & selection
+│   ├── feature_selection/
+│   │   ├── feature_selection.py    – Mann-Whitney U test + Cliff's delta
+│   │   └── Selected_Features.ipynb – Final ranked feature inventory
+│   └── correlation/
+│       ├── Feature_Correlations.ipynb
+│       └── Feature_Correlation_Analysis.ipynb
 │
-├── 4_figure_generation/            # Reproduce every paper figure
-│   ├── shape/
-│   │   └── Shape_Generate_Charts.ipynb              – Fig 1 (shape features)
-│   ├── intensity_wt/
-│   │   └── Hist_Based_Features_Generate_Charts.ipynb – Fig 2 (first-order, WT only)
-│   ├── texture_wt/
-│   │   ├── GLCM_Generate_Charts.ipynb               – Fig 4a (GLCM)
-│   │   ├── GLDM_Generate_Charts.ipynb               – Fig 4b (GLDM)
-│   │   ├── GLRLM_Generate_Charts.ipynb              – Fig 4c (GLRLM)
-│   │   ├── GLSZM_Generate_Charts.ipynb              – Fig 4d (GLSZM)
-│   │   └── NGTDM_Generate_Charts.ipynb              – Fig 4e (NGTDM)
-│   ├── model_based/
-│   │   └── ModelBased_Generate_Charts.ipynb         – Fig 3 (saliency + probability)
-│   │                                                  Appendix Figs 1–2
-│   ├── intensity_subregion/
-│   │   └── Firstorder_Subregion_Generate_Charts.ipynb – Appendix Figs 3–4 (intensity WT/TC/ET)
-│   └── texture_subregion/
-│       └── Texture_Subregion_Generate_Charts.ipynb  – Appendix Figs 5–24 (texture WT/TC/ET)
-│
-├── 5_oracle_model/                 # Oracle Dice-prediction model
-│   ├── Oracle_Model_Regression.ipynb   – Gradient Boosting Regressor (main oracle)
-│   ├── Oracle_Model_Classification.ipynb – Concordant-poor classifier variant
-│   ├── Oracle_Model_DNN.ipynb          – Deep neural network oracle variant
-│   ├── Oracle_Model_with_HPO.ipynb     – Oracle with Bayesian hyperparameter search
-│   ├── hpo.py                          – HPO helper utilities
-│   ├── feature_analysis/
-│   │   ├── Oracle_Feature_Analysis.ipynb        – Were only significant features used? (Appendix D)
-│   │   ├── Oracle_Feature_Ablation_Detailed.ipynb – Full feature-subset ablation
-│   │   └── oracle_improvement.py                – Utility functions for ablation
+├── oracle_model/                   # Dice score prediction
+│   ├── training/
+│   │   ├── Oracle_Model_Regression.ipynb    – Gradient Boosting (main oracle)
+│   │   ├── Oracle_Model_Classification.ipynb
+│   │   ├── Oracle_Model_DNN.ipynb
+│   │   ├── Oracle_Model_with_HPO.ipynb
+│   │   └── hpo.py
+│   ├── ablation/
+│   │   ├── Oracle_Feature_Analysis.ipynb
+│   │   ├── Oracle_Feature_Ablation_Detailed.ipynb
+│   │   └── oracle_improvement.py
 │   ├── subregion_prediction/
-│   │   ├── Oracle_Subregion_Prediction.ipynb    – Per-subregion Dice prediction (Appendix E)
-│   │   └── oracle_subregion_all_features.py     – Script version for batch runs
+│   │   ├── Oracle_Subregion_Prediction.ipynb
+│   │   └── oracle_subregion_all_features.py
 │   └── probabilistic_comparison/
-│       └── Oracle_Probabilistic_Comparison.ipynb – Oracle vs probabilistic baseline comparison
+│       └── Oracle_Probabilistic_Comparison.ipynb
 │
-└── 6_visualization/                # Supplementary visualizations
-    ├── tSNE_Plot.ipynb                 – t-SNE embedding of good vs poor cases
-    └── Visualize_MRI_Images.ipynb      – MRI/mask overlay visualizations
+├── figures/                        # Publication figure generation
+│   ├── main_paper/
+│   │   ├── shape/Shape_Generate_Charts.ipynb
+│   │   ├── intensity/Hist_Based_Features_Generate_Charts.ipynb
+│   │   ├── model_based/ModelBased_Generate_Charts.ipynb
+│   │   └── texture/{GLCM,GLDM,GLRLM,GLSZM,NGTDM}_Generate_Charts.ipynb
+│   └── supplementary/
+│       ├── intensity_subregion/Firstorder_Subregion_Generate_Charts.ipynb
+│       └── texture_subregion/Texture_Subregion_Generate_Charts.ipynb
+│
+└── visualization/                  # Exploratory visualizations
+    ├── tSNE_Plot.ipynb             – t-SNE of good vs. poor cases
+    └── Visualize_MRI_Images.ipynb  – MRI/mask overlay
 ```
 
 ---
 
-## Setup
+## Environments
 
-Each model runs in a dedicated conda environment; the analysis notebooks
-share a single environment. See `0_model_setup/README.md` for full details.
+Three separate Conda environments are used:
 
 ```bash
-# Analysis notebooks (feature extraction, oracle, figures)
-conda env create -f 0_model_setup/environments/environment_pytorch.yml
+# Analysis, feature extraction, oracle, figures
+conda env create -f segmentation/environments/environment_pytorch.yml
 conda activate pytorch
 
-# nnU-Net inference  →  pip install nnunetv2==2.2
-conda env create -f 0_model_setup/environments/environment_nnunet.yml
+# nnUNet v2
+conda env create -f segmentation/environments/environment_nnunet.yml
+conda activate nnunet
 
-# TransBTS inference
-conda env create -f 0_model_setup/environments/environment_TransBTS.yml
+# TransBTS
+conda env create -f segmentation/environments/environment_TransBTS.yml
+conda activate TransBTS
 ```
 
 ---
 
 ## Data
 
-The BraTS datasets are publicly available after registration:
+| Dataset | Purpose | Link |
+|---------|---------|------|
+| BraTS 2020 | 3D U-Net training & feature extraction | [Synapse](https://www.synapse.org/#!Synapse:syn25829067/wiki/612080) |
+| BraTS 2023 | nnUNet & TransBTS inference | [Synapse](https://www.synapse.org/#!Synapse:syn51156910/wiki/621615) |
 
-- **BraTS 2020**: https://www.synapse.org/#!Synapse:syn25829067/wiki/612080
-- **BraTS 2023**: https://www.synapse.org/#!Synapse:syn51156910/wiki/621615
-
-Expected directory layout (update `root_dir` in each notebook):
+Expected layout (`root_dir` in each notebook points here):
 
 ```
 data/
-├── BraTS2020_TrainingData/
-│   └── MICCAI_BraTS2020_TrainingData/
-│       └── BraTS20_Training_001/
-│           ├── BraTS20_Training_001_flair.nii.gz
-│           ├── BraTS20_Training_001_t1.nii.gz
-│           ├── BraTS20_Training_001_t1ce.nii.gz
-│           ├── BraTS20_Training_001_t2.nii.gz
-│           └── BraTS20_Training_001_seg.nii.gz
+├── BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData/
+│   └── BraTS20_Training_001/{flair,t1,t1ce,t2,seg}.nii.gz
 └── BraTS2023_TrainingData/
     └── ...
 ```
 
 ---
 
-## Reproducing the Paper Results
+## Reproducing the Pipeline
 
-Run the notebooks **in order**:
+### 1  Train 3D U-Net (BraTS 2020)
+```bash
+conda activate pytorch
+jupyter nbconvert --to notebook --execute \
+    segmentation/unet3d/Train_UNet3D.ipynb
+```
 
-1. **`0_model_setup/`** — set up environments and run segmentation model inference
-2. **`1_segmentation_models/`** — (3D U-Net specific) run inference to get Dice scores per case
-2. **`2_feature_extraction/`** — extract all feature families
-3. **`3_statistical_analysis/`** — Mann-Whitney U + Cliff's delta feature selection
-4. **`4_figure_generation/`** — generate all paper and appendix figures
-5. **`5_oracle_model/`** — train and evaluate the oracle Dice-prediction model
+### 2  Run nnUNet (BraTS 2023)
+```bash
+conda activate nnunet
+export nnUNet_raw="data/brats2023/raw"
+export nnUNet_preprocessed="data/brats2023/preprocessed"
+export nnUNet_results="results/nnunet"
 
-Each notebook documents its input CSV path and output location at the top.
-Outputs are written to `results/` (created automatically).
+nnUNetv2_plan_and_preprocess -d 001 --verify_dataset_integrity
+nnUNetv2_train 001 3d_fullres 0   # repeat for folds 1–4
+nnUNetv2_predict \
+    -i data/brats2023/raw/imagesTs \
+    -o results/nnunet/predictions \
+    -d 001 -c 3d_fullres --save_probabilities
+```
+
+### 3  Run TransBTS (BraTS 2023)
+```bash
+conda activate TransBTS
+python segmentation/transbts/preprocess.py
+python train.py \
+    --train_file segmentation/transbts/train.txt \
+    --valid_file segmentation/transbts/valid.txt
+```
+
+### 4  Extract Features
+```bash
+conda activate pytorch
+# Run any notebook in feature_extraction/ — each is self-contained
+jupyter nbconvert --to notebook --execute feature_extraction/shape/Calculate_Volume.ipynb
+# ... repeat for intensity, texture, model_based, radiomics
+```
+
+### 5  Statistical Analysis
+```bash
+conda activate pytorch
+python statistical_analysis/feature_selection/feature_selection.py
+jupyter nbconvert --to notebook --execute \
+    statistical_analysis/correlation/Feature_Correlations.ipynb
+```
+
+### 6  Oracle Model
+```bash
+conda activate pytorch
+jupyter nbconvert --to notebook --execute \
+    oracle_model/training/Oracle_Model_Regression.ipynb
+```
+
+### 7  Generate Figures
+```bash
+conda activate pytorch
+for nb in figures/main_paper/**/*.ipynb figures/supplementary/**/*.ipynb; do
+    jupyter nbconvert --to notebook --execute "$nb"
+done
+```
 
 ---
 
 ## Citation
 
-```
+```bibtex
 @article{majumder2025brain,
   title   = {When Neural Segmentation Models Stumble: Radiomics and Model-Based
              Signatures of Brain Tumor Segmentation Failure},
