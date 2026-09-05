@@ -13,6 +13,18 @@ The three segmentation models evaluated are: **3D U-Net**, **nnU-Net**, and **Tr
 ```
 brain-tumor-segmentation-analysis/
 │
+├── 0_model_setup/                  # Environment files + inference setup for all 3 models
+│   ├── README.md                       – Step-by-step instructions for 3D U-Net, nnU-Net, TransBTS
+│   ├── environments/
+│   │   ├── environment_pytorch.yml     – Analysis & feature extraction environment
+│   │   ├── environment_nnunet.yml      – nnU-Net v2 inference environment (CUDA 11.8)
+│   │   └── environment_TransBTS.yml   – TransBTS inference environment
+│   └── transbts_data/
+│       ├── BraTS.py                    – TransBTS BraTS dataset loader
+│       ├── preprocess.py               – NIfTI → pkl conversion for TransBTS
+│       ├── train.txt                   – Train split (BraTS 2023 case IDs used in paper)
+│       └── valid.txt                   – Validation split
+│
 ├── 1_segmentation_models/          # CNN model inference
 │   └── unet_3d/
 │       ├── Run_Inference.ipynb         – Run the trained 3D U-Net on BraTS test cases;
@@ -89,15 +101,20 @@ brain-tumor-segmentation-analysis/
 
 ## Setup
 
+Each model runs in a dedicated conda environment; the analysis notebooks
+share a single environment. See `0_model_setup/README.md` for full details.
+
 ```bash
-pip install -r requirements.txt
+# Analysis notebooks (feature extraction, oracle, figures)
+conda env create -f 0_model_setup/environments/environment_pytorch.yml
+conda activate pytorch
+
+# nnU-Net inference  →  pip install nnunetv2==2.2
+conda env create -f 0_model_setup/environments/environment_nnunet.yml
+
+# TransBTS inference
+conda env create -f 0_model_setup/environments/environment_TransBTS.yml
 ```
-
-For nnU-Net inference, follow the
-[official nnU-Net v2 installation](https://github.com/MIC-DKFZ/nnUNet).
-
-For TransBTS inference, follow the
-[TransBTS repository](https://github.com/Wenxuan-1119/TransBTS).
 
 ---
 
@@ -130,7 +147,8 @@ data/
 
 Run the notebooks **in order**:
 
-1. **`1_segmentation_models/`** — run inference to get Dice scores per case
+1. **`0_model_setup/`** — set up environments and run segmentation model inference
+2. **`1_segmentation_models/`** — (3D U-Net specific) run inference to get Dice scores per case
 2. **`2_feature_extraction/`** — extract all feature families
 3. **`3_statistical_analysis/`** — Mann-Whitney U + Cliff's delta feature selection
 4. **`4_figure_generation/`** — generate all paper and appendix figures
