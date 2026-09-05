@@ -1,0 +1,25 @@
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.env
+venv/
+.venv/
+
+# Data (too large for git — download from BraTS)
+data/
+results/
+*.csv
+*.pkl
+*.json
+*.nii
+*.nii.gz
+
+# OS
+.DS_Store
+Thumbs.db
